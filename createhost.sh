@@ -9,6 +9,7 @@ APACHE_SITESENABLED_DIR="/etc/apache2/sites-enabled/"
 APACHE_WWW_DIR="/var/www/html/"
 APACHE_LOG_DIR="/var/log/apache2/"
 APACHE_SSL_DIR="/etc/apache2/ssl/"
+CERTBOT_SSL_DIR="/etc/letsencrypt/live/"
 
 
 function apacheControl(){
@@ -38,11 +39,17 @@ function apacheControl(){
 	esac
 }
 
+
+
 function getCertificate(){
 	#Check If Domain Exists or Not
 	checkRecord=`dig +short ${1}`
 	[ -z "${checkRecord}" ] && exit 1
 	sudo certbot certonly --standalone --preferred-challenges http -d ${1}
+	if [[ ! -d ${CERTBOT_SSL_DIR}/${1} ]];then
+		echo "Error Obtainging Certificate File"
+		exit 1
+	fi
 }
 
 
@@ -62,14 +69,15 @@ function getCertBot(){
 function generateVirtualHostConfig(){
 	domainname=$1
 cat << EOF
+
 <VirtualHost ${domainname}.com:443>
 	ServerAdmin server@${domainname}
 	DocumentRoot ${APACHE_WWW_DIR}${domainname}
 	ServerName ${domainname}
 	SSLEngine on
-	SSLCertificateFile ${APACHE_SSL_DIR}/${domainname}.crt
-	SSLCertificateKeyFile ${APACHE_SSL_DIR}/${domainname}.key
-	SSLCACertificateFile ${APACHE_SSL_DIR}/${domainname}.intermediate.crt
+	SSLCertificateFile ${CERTBOT_SSL_DIR}${domainname}/cert.pem
+	SSLCertificateKeyFile ${CERTBOT_SSL_DIR}${domainname}/privatekey.pem
+	SSLCACertificateFile ${CERTBOT_SSL_DIR}${domainname}/chain.pem
 	ErrorLog ${APACHE_LOG_DIR}${domainname}-error.log
 	CustomLog ${APACHE_LOG_DIR}/${domainname}-access.log common
 	<Directory "${APACHE_WWW_DIR}${domainname}">
@@ -83,13 +91,19 @@ cat << EOF
 </VirtualHost>
 EOF
 }
+function enableSSLModule(){
+	a2enmod ssl
+	a2ensite $1
+}
+
 function checkApacheServerExists(){
 	echo -e "[+] Checking If Apache Server Exists or not"
 	which apache2 > /dev/null
-	if [[ $? -ne 0 ]];
+	if [[ $? -ne 0 ]];then
 		sudo apt-get -y install apache2
 	fi
 }
+
 
 function main(){
 	checkApacheServerExists
@@ -98,6 +112,7 @@ function main(){
 		exit 1
 	fi
 	getCertBot
+	enableSSLModule ${1}
 	apachestatus=`apacheControl "status"`
 	echo -e "\t Apache Status ... ${apachestatus}"
 	if [[ ${apachestatus} == "active" ]];then
@@ -117,7 +132,7 @@ function main(){
 			cp ${PWD}/hello.html ${APACHE_WWW_DIR}${1}/hello.html
 		fi
 		echo -e "[+} Creating SymLink"
-		ln -s ${APACHE_WWW_DIR}{$1}.conf ${APACHE_SITESENABLED_DIR} 
+		ln -s ${APACHE_WWW_DIR}${1}.conf ${APACHE_SITESENABLED_DIR} 
 
 	fi
 	
