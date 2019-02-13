@@ -43,7 +43,7 @@ function apacheControl(){
 
 function getCertificate(){
 	#Check If Domain Exists or Not
-	checkRecord=`dig +short ${1} @127.0.0.1`
+	checkRecord=`dig +short ${1}`
 	[ -z "${checkRecord}" ] && exit 1
 	sudo certbot certonly --standalone --preferred-challenges http -d ${1}
 	if [[ ! -d ${CERTBOT_SSL_DIR}/${1} ]];then
