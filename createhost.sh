@@ -31,7 +31,7 @@ function apacheControl(){
 		;;
 
 	"configtest")
-		apacehctl configtest
+		apachectl configtest
 		;;
 	*)
 		echo "Usage: {start|stop|restart|reload|status|configtest}"
@@ -43,7 +43,7 @@ function apacheControl(){
 
 function getCertificate(){
 	#Check If Domain Exists or Not
-	checkRecord=`dig +short ${1}`
+	checkRecord=`dig +short ${1} @127.0.0.1`
 	[ -z "${checkRecord}" ] && exit 1
 	sudo certbot certonly --standalone --preferred-challenges http -d ${1}
 	if [[ ! -d ${CERTBOT_SSL_DIR}/${1} ]];then
@@ -70,13 +70,13 @@ function generateVirtualHostConfig(){
 	domainname=$1
 cat << EOF
 
-<VirtualHost ${domainname}.com:443>
+<VirtualHost ${domainname}:443>
 	ServerAdmin server@${domainname}
 	DocumentRoot ${APACHE_WWW_DIR}${domainname}
 	ServerName ${domainname}
 	SSLEngine on
 	SSLCertificateFile ${CERTBOT_SSL_DIR}${domainname}/cert.pem
-	SSLCertificateKeyFile ${CERTBOT_SSL_DIR}${domainname}/privatekey.pem
+	SSLCertificateKeyFile ${CERTBOT_SSL_DIR}${domainname}/privkey.pem
 	SSLCACertificateFile ${CERTBOT_SSL_DIR}${domainname}/chain.pem
 	ErrorLog ${APACHE_LOG_DIR}${domainname}-error.log
 	CustomLog ${APACHE_LOG_DIR}/${domainname}-access.log common
@@ -92,8 +92,10 @@ cat << EOF
 EOF
 }
 function enableSSLModule(){
-	a2enmod ssl
-	a2ensite $1
+	a2query -m ssl > /dev/null
+	if [[ $? -ne 0 ]];then
+		a2enmod ssl
+	fi
 }
 
 function checkApacheServerExists(){
@@ -127,12 +129,20 @@ function main(){
 			if [ ! -d ${APACHE_WWW_DIR}${1} ];then
 				echo -e "Creating Host Directory"
 				mkdir ${APACHE_WWW_DIR}${1}
+				chown -R www-data: ${APACHE_WWW_DIR}${1}
 			fi
 			echo -e "Copying Default Html File to New Domain"
+			echo "<h1>Hello</h1>" > ${APACHE_WWW_DIR}${1}/index.html
 			cp ${PWD}/hello.html ${APACHE_WWW_DIR}${1}/hello.html
 		fi
 		echo -e "[+} Creating SymLink"
-		ln -s ${APACHE_WWW_DIR}${1}.conf ${APACHE_SITESENABLED_DIR} 
+		ln -s ${APACHE_DIR}${1}.conf ${APACHE_SITESENABLED_DIR} 
+		apacheControl "configtest" > /dev/null
+		if [[ $? -ne 0 ]];then
+			echo "Configuration Error..Please Fix it"
+			exit 1
+		fi
+		apacheControl "start"
 
 	fi
 	
