@@ -122,7 +122,8 @@ function main(){
 		apacheControl "stop"
 	fi
 	if [[ ${apachestatus} == "inactive" ]];then
-		#getCertificate $1
+		getCertificate $1
+
 		echo -e "Generating Host Config File"
 		generateVirtualHostConfig $1 > ${APACHE_DIR}${1}.conf
 		if [[ -f ${APACHE_DIR}${1}.conf ]];then
